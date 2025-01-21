@@ -1,5 +1,7 @@
 package de.unibayreuth.se.taskboard.data.impl;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import de.unibayreuth.se.taskboard.business.domain.Identifiable;
 import de.unibayreuth.se.taskboard.business.domain.User;
 import de.unibayreuth.se.taskboard.business.exceptions.DuplicateNameException;
 import de.unibayreuth.se.taskboard.business.exceptions.UserNotFoundException;
@@ -52,13 +54,18 @@ public class UserPersistenceServiceEventSourcingImpl implements UserPersistenceS
     @NonNull
     @Override
     public User upsert(User user) throws UserNotFoundException, DuplicateNameException {
-        // TODO: Implement upsert
-        /*
-        The upsert method in the UserPersistenceServiceEventSourcingImpl class handles both the creation and updating of users.
-        If the user ID is null, it creates a new user by generating a new UUID, saving an insert event, and returning the newly created user.
-        If the user ID is not null, it updates the existing user by finding it in the repository, updating its fields, saving an update event, and returning the updated user.
-        In both cases, it uses the EventRepository to log the changes and the UserRepository to persist the user data.
-        */
-        return new User("Firstname Lastname");
+        if (user.getId() == null) {
+            UserEntity userEntity = userEntityMapper.toEntity(user);
+            userRepository.save(userEntity);
+            eventRepository.saveAndFlush(EventEntity.insertEventOf(user, user.getId(), new ObjectMapper()));
+            return userEntityMapper.fromEntity(userEntity);
+        } else {
+            UserEntity userEntity = userRepository.findById(user.getId())
+                    .orElseThrow(() -> new UserNotFoundException(user.getId().toString()));
+            User user1 = this.userEntityMapper.fromEntity(userRepository.save(userEntity));
+            eventRepository.saveAndFlush(EventEntity.updateEventOf(user1, user1.getId(), new ObjectMapper()));
+            return userEntityMapper.fromEntity(userEntity);
+        }
     }
 }
+
